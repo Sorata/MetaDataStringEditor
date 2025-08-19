@@ -91,12 +91,16 @@ namespace MetaDataStringEditor {
             Logger.I("刷新列表");
 
             listView1.BeginUpdate();
+            
+            // 对于大数据集，使用批量添加来提升性能
+            var items = new ListViewItem[file.strBytes.Count];
             for (int i = 0; i < file.strBytes.Count; i++) {
-                EditorListItem item = new EditorListItem(file.strBytes[i]) {
+                items[i] = new EditorListItem(file.strBytes[i]) {
                     Tag = i
                 };
-                listView1.Items.Add(item);
             }
+            listView1.Items.AddRange(items);
+            
             listView1.EndUpdate();
         }
 
@@ -178,31 +182,24 @@ namespace MetaDataStringEditor {
                 return;
             }
             
-            // 当搜索文本改变时，重置搜索状态并更新计数显示
+            // 当搜索框清空时，清除搜索状态
             string keyWord = textBox1.Text.Trim();
-            if (keyWord != lastSearchKeyword) {
+            if (string.IsNullOrEmpty(keyWord)) {
                 searchResults.Clear();
                 currentSearchIndex = -1;
-                lastSearchKeyword = keyWord;
-                
-                // 更新所有项的高亮显示
-                for (int i = 0; i < listView1.Items.Count; i++) {
-                    var item = listView1.Items[i] as EditorListItem;
-                    item.SetSearchHighlight(keyWord);
-                    if (!string.IsNullOrEmpty(keyWord) && item.MatchKeyWord(keyWord)) {
-                        searchResults.Add(i);
-                    }
-                }
-                
+                lastSearchKeyword = "";
                 UpdateSearchCountDisplay();
             }
         }
+
+        // 移除高亮功能，不再需要此方法
 
         private void PerformSearch() {
             string keyWord = textBox1.Text.Trim();
             if (string.IsNullOrEmpty(keyWord)) {
                 searchResults.Clear();
                 currentSearchIndex = -1;
+                lastSearchKeyword = "";
                 UpdateSearchCountDisplay();
                 return;
             }
@@ -213,7 +210,7 @@ namespace MetaDataStringEditor {
                 currentSearchIndex = -1;
                 lastSearchKeyword = keyWord;
 
-                // 查找所有匹配的项
+                // 只查找匹配的项，不设置高亮
                 for (int i = 0; i < listView1.Items.Count; i++) {
                     var item = listView1.Items[i] as EditorListItem;
                     if (item.MatchKeyWord(keyWord)) {
@@ -249,17 +246,12 @@ namespace MetaDataStringEditor {
 
         private void NavigateToSearchResult() {
             if (currentSearchIndex >= 0 && currentSearchIndex < searchResults.Count) {
-                // 清除之前的选中状态和高亮
-                foreach (ListViewItem item in listView1.Items) {
-                    item.Selected = false;
-                    var editorItem = item as EditorListItem;
-                    editorItem.SetSelectedHighlight(false);
-                }
+                // 清除之前的选中状态
+                listView1.SelectedItems.Clear();
                 
                 int itemIndex = searchResults[currentSearchIndex];
-                var selectedItem = listView1.Items[itemIndex] as EditorListItem;
+                var selectedItem = listView1.Items[itemIndex];
                 selectedItem.Selected = true;
-                selectedItem.SetSelectedHighlight(true);
                 selectedItem.EnsureVisible();
                 listView1.Focus();
                 UpdateSearchCountDisplay();

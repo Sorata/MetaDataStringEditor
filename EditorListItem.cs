@@ -13,7 +13,7 @@ namespace MetaDataStringEditor {
         public bool IsEdit { private set; get; }
         public byte[] OriginStrBytes { private set; get; }
         public byte[] NewStrBytes { private set; get; }
-        private string currentSearchKeyword = "";
+        // 移除高亮功能相关字段
 
         public EditorListItem(byte[] OriginStrBytes) {
             this.OriginStrBytes = OriginStrBytes;
@@ -41,42 +41,14 @@ namespace MetaDataStringEditor {
         }
 
         public bool MatchKeyWord(string keyWord) {
-            return Text.ToLower().Contains(keyWord.ToLower()) ||
-                SubItems[0].Text.ToLower().Contains(keyWord.ToLower()) ||
-                SubItems[1].Text.ToLower().Contains(keyWord.ToLower());
+            if (string.IsNullOrEmpty(keyWord)) return false;
+            
+            // 使用不区分大小写的字符串比较，避免重复调用ToLower()
+            return Text.IndexOf(keyWord, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                SubItems[0].Text.IndexOf(keyWord, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                SubItems[1].Text.IndexOf(keyWord, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
-        public void SetSearchHighlight(string keyword) {
-            currentSearchKeyword = keyword;
-            if (string.IsNullOrEmpty(keyword)) {
-                // 清除高亮
-                BackColor = SystemColors.Window;
-                ForeColor = SystemColors.WindowText;
-            } else if (MatchKeyWord(keyword)) {
-                // 设置高亮背景色
-                BackColor = Color.Yellow;
-                ForeColor = Color.Black;
-            } else {
-                // 恢复默认颜色
-                BackColor = SystemColors.Window;
-                ForeColor = SystemColors.WindowText;
-            }
-        }
-
-        public void SetSelectedHighlight(bool isSelected) {
-            if (isSelected && !string.IsNullOrEmpty(currentSearchKeyword) && MatchKeyWord(currentSearchKeyword)) {
-                // 当前选中的搜索结果使用更深的高亮色
-                BackColor = Color.Orange;
-                ForeColor = Color.Black;
-            } else if (!string.IsNullOrEmpty(currentSearchKeyword) && MatchKeyWord(currentSearchKeyword)) {
-                // 普通搜索结果高亮
-                BackColor = Color.Yellow;
-                ForeColor = Color.Black;
-            } else {
-                // 恢复默认颜色
-                BackColor = SystemColors.Window;
-                ForeColor = SystemColors.WindowText;
-            }
-        }
+        // 移除高亮功能相关方法
     }
 }

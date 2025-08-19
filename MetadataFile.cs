@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -8,6 +8,8 @@ using System.IO;
 namespace MetaDataStringEditor {
     class MetadataFile : IDisposable {
         public BinaryReader reader;
+        private byte[] fileData;
+        private MemoryStream memoryStream;
 
         private uint stringLiteralOffset;
         private uint stringLiteralCount;
@@ -18,7 +20,10 @@ namespace MetaDataStringEditor {
         public List<byte[]> strBytes = new List<byte[]>();
 
         public MetadataFile(string fullName) {
-            reader = new BinaryReader(File.OpenRead(fullName));
+            // 一次性将整个文件读入内存
+            fileData = File.ReadAllBytes(fullName);
+            memoryStream = new MemoryStream(fileData);
+            reader = new BinaryReader(memoryStream);
 
             // 读取文件
             ReadHeader();
@@ -128,6 +133,8 @@ namespace MetaDataStringEditor {
         
         public void Dispose() {
             reader?.Dispose();
+            memoryStream?.Dispose();
+            fileData = null;
         }
         
         public class StringLiteral {
