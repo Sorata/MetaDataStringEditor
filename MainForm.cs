@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -48,11 +48,17 @@ namespace MetaDataStringEditor {
                     toolStripProgressBar1.Value = val;
                 }
             };
+            
+            // 设置搜索框提示文本
+            SetSearchBoxPlaceholder();
         }
 
         private FormStatus status = FormStatus.Waiting;
         private MetadataFile file;
         private EditForm editForm = new EditForm();
+        private List<int> searchResults = new List<int>();
+        private int currentSearchIndex = -1;
+        private string lastSearchKeyword = "";
 
         // 菜单栏
         private void 加载ToolStripMenuItem_Click(object sender, EventArgs e) {
@@ -121,24 +127,176 @@ namespace MetaDataStringEditor {
                 SearchToNext();
         }
 
+        private void buttonPrevious_Click(object sender, EventArgs e) {
+            if (textBox1.Text.Length > 0)
+                SearchToPrevious();
+        }
+
         private void textBox1_KeyPress(object sender, KeyPressEventArgs e) {
             if (e.KeyChar == '\r' && textBox1.Text.Length > 0)
                 SearchToNext();
         }
 
-        private void SearchToNext() {
-            string keyWord = textBox1.Text;
-            int start = listView1.SelectedIndices.Count > 0 ? listView1.SelectedIndices[0] : -1;
-            for (int i = 0; i < listView1.Items.Count; i++) {
-                var item = listView1.Items[(i + start + 1) % listView1.Items.Count] as EditorListItem;
-                if (item.MatchKeyWord(keyWord)) {
-                    item.Selected = true;
-                    item.EnsureVisible();
-                    return;
-                }
-
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData) {
+            // 处理快捷键
+            switch (keyData) {
+                case Keys.Control | Keys.F:
+                    // Ctrl+F: 聚焦到搜索框
+                    textBox1.Focus();
+                    textBox1.SelectAll();
+                    return true;
+                    
+                case Keys.F3:
+                    // F3: 查找下一个
+                    if (textBox1.Text.Length > 0) {
+                        SearchToNext();
+                    }
+                    return true;
+                    
+                case Keys.Shift | Keys.F3:
+                    // Shift+F3: 查找上一个
+                    if (textBox1.Text.Length > 0) {
+                        SearchToPrevious();
+                    }
+                    return true;
+                    
+                case Keys.Escape:
+                    // Esc: 清除搜索
+                    if (textBox1.Focused) {
+                        textBox1.Text = "";
+                        listView1.Focus();
+                    }
+                    return true;
             }
-            Logger.I("找不到搜索字符串");
+            
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        private void textBox1_TextChanged(object sender, EventArgs e) {
+            // 忽略提示文本
+            if (textBox1.Text == "输入搜索内容... (Ctrl+F)") {
+                return;
+            }
+            
+            // 当搜索文本改变时，重置搜索状态并更新计数显示
+            string keyWord = textBox1.Text.Trim();
+            if (keyWord != lastSearchKeyword) {
+                searchResults.Clear();
+                currentSearchIndex = -1;
+                lastSearchKeyword = keyWord;
+                
+                // 更新所有项的高亮显示
+                for (int i = 0; i < listView1.Items.Count; i++) {
+                    var item = listView1.Items[i] as EditorListItem;
+                    item.SetSearchHighlight(keyWord);
+                    if (!string.IsNullOrEmpty(keyWord) && item.MatchKeyWord(keyWord)) {
+                        searchResults.Add(i);
+                    }
+                }
+                
+                UpdateSearchCountDisplay();
+            }
+        }
+
+        private void PerformSearch() {
+            string keyWord = textBox1.Text.Trim();
+            if (string.IsNullOrEmpty(keyWord)) {
+                searchResults.Clear();
+                currentSearchIndex = -1;
+                UpdateSearchCountDisplay();
+                return;
+            }
+
+            // 如果搜索关键词改变了，重新搜索
+            if (keyWord != lastSearchKeyword) {
+                searchResults.Clear();
+                currentSearchIndex = -1;
+                lastSearchKeyword = keyWord;
+
+                // 查找所有匹配的项
+                for (int i = 0; i < listView1.Items.Count; i++) {
+                    var item = listView1.Items[i] as EditorListItem;
+                    if (item.MatchKeyWord(keyWord)) {
+                        searchResults.Add(i);
+                    }
+                }
+            }
+
+            UpdateSearchCountDisplay();
+        }
+
+        private void SearchToNext() {
+            PerformSearch();
+            if (searchResults.Count == 0) {
+                Logger.I("找不到搜索字符串");
+                return;
+            }
+
+            currentSearchIndex = (currentSearchIndex + 1) % searchResults.Count;
+            NavigateToSearchResult();
+        }
+
+        private void SearchToPrevious() {
+            PerformSearch();
+            if (searchResults.Count == 0) {
+                Logger.I("找不到搜索字符串");
+                return;
+            }
+
+            currentSearchIndex = currentSearchIndex <= 0 ? searchResults.Count - 1 : currentSearchIndex - 1;
+            NavigateToSearchResult();
+        }
+
+        private void NavigateToSearchResult() {
+            if (currentSearchIndex >= 0 && currentSearchIndex < searchResults.Count) {
+                // 清除之前的选中状态和高亮
+                foreach (ListViewItem item in listView1.Items) {
+                    item.Selected = false;
+                    var editorItem = item as EditorListItem;
+                    editorItem.SetSelectedHighlight(false);
+                }
+                
+                int itemIndex = searchResults[currentSearchIndex];
+                var selectedItem = listView1.Items[itemIndex] as EditorListItem;
+                selectedItem.Selected = true;
+                selectedItem.SetSelectedHighlight(true);
+                selectedItem.EnsureVisible();
+                listView1.Focus();
+                UpdateSearchCountDisplay();
+            }
+        }
+
+        private void UpdateSearchCountDisplay() {
+            if (string.IsNullOrEmpty(textBox1.Text.Trim())) {
+                labelSearchCount.Text = "";
+            } else if (searchResults.Count == 0) {
+                labelSearchCount.Text = "0/0";
+            } else {
+                labelSearchCount.Text = $"{currentSearchIndex + 1}/{searchResults.Count}";
+            }
+        }
+        
+        private void SetSearchBoxPlaceholder() {
+            // 为搜索框添加水印提示
+            if (string.IsNullOrEmpty(textBox1.Text)) {
+                textBox1.ForeColor = Color.Gray;
+                textBox1.Text = "输入搜索内容... (Ctrl+F)";
+            }
+        }
+        
+        private void textBox1_Enter(object sender, EventArgs e) {
+            // 当搜索框获得焦点时，清除提示文本
+            if (textBox1.Text == "输入搜索内容... (Ctrl+F)") {
+                textBox1.Text = "";
+                textBox1.ForeColor = Color.Black;
+            }
+        }
+        
+        private void textBox1_Leave(object sender, EventArgs e) {
+            // 当搜索框失去焦点且为空时，显示提示文本
+            if (string.IsNullOrEmpty(textBox1.Text)) {
+                SetSearchBoxPlaceholder();
+            }
         }
 
         // 修改
@@ -180,6 +338,13 @@ namespace MetaDataStringEditor {
             file?.Dispose();
             file = null;
             Text = "MetadataStringEditor";
+            // 重置搜索状态
+            searchResults.Clear();
+            currentSearchIndex = -1;
+            lastSearchKeyword = "";
+            textBox1.Text = "";
+            SetSearchBoxPlaceholder();
+            UpdateSearchCountDisplay();
         }
 
         private enum FormStatus { Waiting, Loading, Saving, Editing }
