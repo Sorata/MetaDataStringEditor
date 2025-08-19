@@ -3,6 +3,8 @@ MetadataFile类 - 处理Unity global-metadata.dat文件的读取和解析
 """
 import struct
 import io
+import os
+import re
 from typing import List, Optional
 from utils import Logger, ProgressBar, safe_decode_utf8
 
@@ -106,7 +108,14 @@ class MetadataFile:
         """读取字符串字节数据"""
         Logger.info("读取字符串数据")
         
+        # 创建待翻译目录
+        translate_dir = "待翻译"
+        if not os.path.exists(translate_dir):
+            os.makedirs(translate_dir)
+            Logger.info(f"创建目录: {translate_dir}")
+        
         ProgressBar.set_max(len(self.string_literals))
+        japanese_count = 0
         
         for i, literal in enumerate(self.string_literals):
             # 定位到字符串数据位置
@@ -117,7 +126,44 @@ class MetadataFile:
             str_data = self.memory_stream.read(literal.length)
             self.str_bytes.append(str_data)
             
+            # 检测日语文本
+            try:
+                text = safe_decode_utf8(str_data)
+                if self._is_japanese_text(text):
+                    japanese_count += 1
+                    # 输出到待翻译文件
+                    filename = f"{i}.txt"
+                    filepath = os.path.join(translate_dir, filename)
+                    with open(filepath, 'w', encoding='utf-8') as f:
+                        f.write(text)
+            except Exception as e:
+                # 忽略解码错误
+                pass
+            
             ProgressBar.plus_one()
+        
+        if japanese_count > 0:
+            Logger.info(f"检测到 {japanese_count} 个日语文本，已输出到 {translate_dir} 目录")
+    
+    def _is_japanese_text(self, text: str) -> bool:
+        """检测文本是否包含日语字符"""
+        if not text or len(text.strip()) == 0:
+            return False
+        
+        # 日语字符范围：
+        # 平假名: \u3040-\u309F
+        # 片假名: \u30A0-\u30FF  
+        # 汉字(CJK统一表意文字): \u4E00-\u9FAF
+        # 日语标点符号: \u3000-\u303F
+        japanese_pattern = re.compile(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF\u3000-\u303F]')
+        
+        # 检查是否包含日语字符
+        if japanese_pattern.search(text):
+            # 进一步过滤：确保不是纯数字、纯英文或过短的文本
+            if len(text.strip()) >= 2 and not text.strip().isdigit() and not text.strip().isascii():
+                return True
+        
+        return False
     
     def get_string_count(self) -> int:
         """获取字符串数量"""
